@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import MediaPlayer
+import AVFoundation
 
 public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -25,35 +26,69 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
         }
       }
     case "querySongs":
-        // Check permission status before querying
-        if MPMediaLibrary.authorizationStatus() == .authorized {
-            self.querySongsFromLibrary(result: result)
-        } else {
-            // Let flutter know that permission is required
-            result(FlutterError(code: "PERMISSION_DENIED", message: "User has not granted media library access.", details: nil))
-        }
+        // On iOS, we query from the app's documents directory.
+        // Permission for this is implicitly granted.
+        self.querySongsFromDocumentsDirectory(result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
   }
 
-  private func querySongsFromLibrary(result: @escaping FlutterResult) {
-      let songsQuery = MPMediaQuery.songs()
-      guard let items = songsQuery.items else {
+  private func querySongsFromDocumentsDirectory(result: @escaping FlutterResult) {
+      let fileManager = FileManager.default
+      guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
           result([])
           return
       }
 
-      let songList = items.map { (item: MPMediaItem) -> [String: Any?] in
-          return [
-              "id": item.persistentID,
-              "title": item.title,
-              "artist": item.artist,
-              "album": item.albumTitle,
-              "duration": Int(item.playbackDuration * 1000), // convert to milliseconds
-              "data": item.assetURL?.absoluteString // Note: URL can be nil
-          ]
+      var songList: [[String: Any?]] = []
+      let audioExtensions = ["mp3", "m4a", "wav", "flac", "aac"]
+
+      do {
+          let fileURLs = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
+
+          for url in fileURLs where audioExtensions.contains(url.pathExtension.lowercased()) {
+              let asset = AVAsset(url: url)
+              
+              // Use a hash of the file path as a pseudo-persistent ID
+              let persistentID = url.absoluteString.hash
+
+              var title: String?
+              var artist: String?
+              var album: String?
+              let durationInSeconds = CMTimeGetSeconds(asset.duration)
+              let durationInMilliseconds = !durationInSeconds.isNaN ? Int(durationInSeconds * 1000) : 0
+
+              // Fetch all available metadata
+              let metadata = asset.metadata
+              for item in metadata {
+                  if item.commonKey == .commonKeyTitle {
+                      title = item.stringValue
+                  } else if item.commonKey == .commonKeyArtist {
+                      artist = item.stringValue
+                  } else if item.commonKey == .commonKeyAlbumName {
+                      album = item.stringValue
+                  }
+              }
+              
+              // Fallback to filename if title is not found in metadata
+              if title == nil || title!.isEmpty {
+                  title = url.deletingPathExtension().lastPathComponent
+              }
+
+              let songData: [String: Any?] = [
+                  "id": persistentID,
+                  "title": title,
+                  "artist": artist,
+                  "album": album,
+                  "duration": durationInMilliseconds,
+                  "data": url.path // Use the local file path
+              ]
+              songList.append(songData)
+          }
+          result(songList)
+      } catch {
+          result(FlutterError(code: "IO_ERROR", message: "Failed to read documents directory.", details: error.localizedDescription))
       }
-      result(songList)
   }
 }
