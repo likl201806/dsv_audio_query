@@ -82,7 +82,7 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
                   "artist": artist,
                   "album": album,
                   "duration": durationInMilliseconds,
-                  "data": url.path // Use the local file path
+                  "data": url.absoluteString // Use the full file URL
               ]
               songList.append(songData)
           }
