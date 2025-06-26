@@ -261,6 +261,14 @@ class _LocalSongsScreenState extends State<LocalSongsScreen> {
         content: SingleChildScrollView(
           child: ListBody(
             children: <Widget>[
+              if (song.artwork != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: Image.memory(song.artwork!),
+                  ),
+                ),
               _buildDetailRow('Artist', song.artist ?? 'N/A'),
               _buildDetailRow('Album', song.album ?? 'N/A'),
               _buildDetailRow('Duration', '${(song.duration ?? 0) ~/ 1000}s'),
@@ -330,10 +338,51 @@ class _LocalSongsScreenState extends State<LocalSongsScreen> {
                     final song = _songs[index];
                     final isPlaying = song.id == _currentlyPlayingSongId;
                     return ListTile(
-                      leading: isPlaying
-                          ? const Icon(Icons.pause_circle_filled,
-                              color: Colors.blue)
-                          : const Icon(Icons.play_circle_fill),
+                      leading: SizedBox(
+                        width: 50,
+                        height: 50,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if (song.artwork != null)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4.0),
+                                child: Image.memory(
+                                  song.artwork!,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(Icons.music_note,
+                                        size: 30, color: Colors.grey);
+                                  },
+                                ),
+                              )
+                            else
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(4.0),
+                                ),
+                                child: const Icon(Icons.music_note,
+                                    size: 30, color: Colors.grey),
+                              ),
+                            if (isPlaying)
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(4.0),
+                                ),
+                                child: const Icon(Icons.pause,
+                                    color: Colors.white),
+                              ),
+                          ],
+                        ),
+                      ),
                       title: Text(song.title,
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(song.artist ?? 'Unknown Artist',

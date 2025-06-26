@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Represents a single song's metadata.
 class SongModel {
   /// The unique ID of the song on the device.
@@ -20,6 +22,9 @@ class SongModel {
   /// The absolute file path to the song on the device.
   final String data;
 
+  /// The artwork of the song as a byte array. Can be null if not available.
+  final Uint8List? artwork;
+
   /// Creates a new instance of [SongModel].
   SongModel({
     required this.id,
@@ -28,6 +33,7 @@ class SongModel {
     this.album,
     this.duration,
     required this.data,
+    this.artwork,
   });
 
   /// Creates a [SongModel] instance from a [Map] (typically from the platform channel).
@@ -39,6 +45,7 @@ class SongModel {
       album: map['album'],
       duration: map['duration'],
       data: map['data'],
+      artwork: map['artwork'],
     );
   }
 }

@@ -61,6 +61,8 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
 
               // Fetch all available metadata
               let metadata = asset.metadata
+              var artwork: Data?
+
               for item in metadata {
                   if item.commonKey == .commonKeyTitle {
                       title = item.stringValue
@@ -68,6 +70,8 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
                       artist = item.stringValue
                   } else if item.commonKey == .commonKeyAlbumName {
                       album = item.stringValue
+                  } else if item.commonKey == .commonKeyArtwork, let dataValue = item.dataValue {
+                      artwork = dataValue
                   }
               }
               
@@ -82,7 +86,8 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
                   "artist": artist,
                   "album": album,
                   "duration": durationInMilliseconds,
-                  "data": url.absoluteString // Use the full file URL
+                  "data": url.absoluteString, // Use the full file URL
+                  "artwork": artwork
               ]
               songList.append(songData)
           }

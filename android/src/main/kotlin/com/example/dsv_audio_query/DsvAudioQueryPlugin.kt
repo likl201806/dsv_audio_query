@@ -3,7 +3,9 @@ package com.example.dsv_audio_query
 import android.Manifest
 import android.app.Activity
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.core.app.ActivityCompat
@@ -102,6 +104,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST,
         MediaStore.Audio.Media.ALBUM,
+        MediaStore.Audio.Media.ALBUM_ID,
         MediaStore.Audio.Media.DURATION,
         MediaStore.Audio.Media.DATA
     )
@@ -118,14 +121,34 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
           null,
           sortOrder
       )?.use { cursor -> // 'use' will automatically close the cursor
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+        val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+
         while (cursor.moveToNext()) {
+          val albumId = cursor.getLong(albumIdColumn)
+          val artworkUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
+          var artwork: ByteArray? = null
+          try {
+            resolver.openInputStream(artworkUri)?.use { stream ->
+              artwork = stream.readBytes()
+            }
+          } catch (e: Exception) {
+            // Artwork not found or other error
+          }
+
           val songMap = mapOf(
-              "id" to cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)),
-              "title" to cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)),
-              "artist" to cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)),
-              "album" to cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)),
-              "duration" to cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)),
-              "data" to cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA))
+              "id" to cursor.getLong(idColumn),
+              "title" to cursor.getString(titleColumn),
+              "artist" to cursor.getString(artistColumn),
+              "album" to cursor.getString(albumColumn),
+              "duration" to cursor.getLong(durationColumn),
+              "data" to cursor.getString(dataColumn),
+              "artwork" to artwork
           )
           songList.add(songMap)
         }
