@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.pm.PackageManager
-import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -145,40 +144,24 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
         while (cursor.moveToNext()) {
-          val songId = cursor.getLong(idColumn)
-          val songUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, songId)
+          val albumId = cursor.getLong(albumIdColumn)
+          val artworkUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
           var artwork: ByteArray? = null
-
-          // --- Method 1: Prioritize Embedded Artwork (more accurate) ---
           try {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(activity!!.applicationContext, songUri)
-            artwork = retriever.embeddedPicture
-            retriever.release()
-          } catch (e: Exception) {
-            // Failed to get embedded artwork, will try album art next
-          }
-
-          // --- Method 2: Fallback to Album Artwork ---
-          if (artwork == null) {
-            try {
-              val albumId = cursor.getLong(albumIdColumn)
-              val albumArtUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
-              resolver.openInputStream(albumArtUri)?.use { stream ->
-                artwork = stream.readBytes()
-              }
-            } catch (e: Exception) {
-              // No album art found either.
+            resolver.openInputStream(artworkUri)?.use { stream ->
+              artwork = stream.readBytes()
             }
+          } catch (e: Exception) {
+            // Artwork not found or other error
           }
 
           val songMap = mapOf(
-              "id" to songId,
+              "id" to cursor.getLong(idColumn),
               "title" to cursor.getString(titleColumn),
               "artist" to cursor.getString(artistColumn),
               "album" to cursor.getString(albumColumn),
               "duration" to cursor.getLong(durationColumn),
-              "data" to songUri.toString(), // Use Content URI for modern Android
+              "data" to cursor.getString(dataColumn),
               "artwork" to artwork
           )
           songList.add(songMap)
