@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.pm.PackageManager
+import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -118,7 +119,6 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST,
         MediaStore.Audio.Media.ALBUM,
-        MediaStore.Audio.Media.ALBUM_ID,
         MediaStore.Audio.Media.DURATION,
         MediaStore.Audio.Media.DATA
     )
@@ -139,20 +139,23 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
         val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
         val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
         val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
         val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
         while (cursor.moveToNext()) {
-          val albumId = cursor.getLong(albumIdColumn)
-          val artworkUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
+          val filePath = cursor.getString(dataColumn)
           var artwork: ByteArray? = null
-          try {
-            resolver.openInputStream(artworkUri)?.use { stream ->
-              artwork = stream.readBytes()
+
+          if (filePath != null) {
+            val retriever = MediaMetadataRetriever()
+            try {
+              retriever.setDataSource(filePath)
+              artwork = retriever.embeddedPicture
+            } catch (e: Exception) {
+              // File path may be invalid or file is corrupted.
+            } finally {
+              retriever.release()
             }
-          } catch (e: Exception) {
-            // Artwork not found or other error
           }
 
           val songMap = mapOf(
