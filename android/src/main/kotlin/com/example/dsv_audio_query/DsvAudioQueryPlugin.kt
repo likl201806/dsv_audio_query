@@ -123,7 +123,8 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         MediaStore.Audio.Media.DATA
     )
     // Query condition.
-    val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+    val selection = "${MediaStore.Audio.Media.DURATION} >= ?"
+    val selectionArgs = arrayOf("3000") // 30 seconds
     // Sort order.
     val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
@@ -132,7 +133,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
           MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
           projection,
           selection,
-          null,
+          selectionArgs,
           sortOrder
       )?.use { cursor -> // 'use' will automatically close the cursor
         val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
