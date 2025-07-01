@@ -19,6 +19,11 @@ class MockDsvAudioQueryPlatform
   Future<PermissionStatus> requestPermission() async {
     return PermissionStatus.granted;
   }
+
+  @override
+  Future<void> scanFile({String? path}) async {
+    // This is a mock, so we don't need to do anything.
+  }
 }
 
 void main() {
@@ -26,6 +31,14 @@ void main() {
 
   test('$MethodChannelDsvAudioQuery is the default instance', () {
     expect(initialPlatform, isInstanceOf<MethodChannelDsvAudioQuery>());
+  });
+
+  test('querySongs returns empty list', () async {
+    DsvAudioQuery dsvAudioQueryPlugin = DsvAudioQuery();
+    MockDsvAudioQueryPlatform fakePlatform = MockDsvAudioQueryPlatform();
+    DsvAudioQueryPlatform.instance = fakePlatform;
+
+    expect(await dsvAudioQueryPlugin.querySongs(), []);
   });
 
   test('getPlatformVersion', () async {

@@ -29,6 +29,10 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
         // On iOS, we query from the app's documents directory.
         // Permission for this is implicitly granted.
         self.querySongsFromDocumentsDirectory(result: result)
+    case "scanFile":
+        // This is not needed on iOS as the file system is scanned directly.
+        // We call result to complete the Dart Future.
+        result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }

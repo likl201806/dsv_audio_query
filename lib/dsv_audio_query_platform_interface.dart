@@ -43,4 +43,11 @@ abstract class DsvAudioQueryPlatform extends PlatformInterface {
   Future<List<SongModel>> querySongs({String? sortType}) {
     throw UnimplementedError('querySongs() has not been implemented.');
   }
+
+  /// Scans a file to make it available to the media library.
+  /// On Android, this triggers the MediaScanner. If path is null, it scans the public Music directory.
+  /// On iOS, this is a no-op as files in the Documents directory are found automatically.
+  Future<void> scanFile({String? path}) {
+    throw UnimplementedError('scanFile() has not been implemented.');
+  }
 }

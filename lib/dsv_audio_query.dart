@@ -28,4 +28,8 @@ class DsvAudioQuery {
   Future<List<SongModel>> querySongs({String? sortType}) {
     return DsvAudioQueryPlatform.instance.querySongs(sortType: sortType);
   }
+
+  Future<void> scanFile({String? path}) {
+    return DsvAudioQueryPlatform.instance.scanFile(path: path);
+  }
 }

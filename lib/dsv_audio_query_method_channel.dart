@@ -32,22 +32,13 @@ class MethodChannelDsvAudioQuery extends DsvAudioQueryPlatform {
 
   @override
   Future<List<SongModel>> querySongs({String? sortType}) async {
-    try {
-      final List<dynamic>? result =
-          await methodChannel.invokeMethod<List<dynamic>>(
-        'querySongs',
-        {'sortType': sortType},
-      );
+    final List<dynamic>? songs =
+        await methodChannel.invokeMethod('querySongs', {'sortType': sortType});
+    return songs?.map((e) => SongModel.fromMap(e)).toList() ?? [];
+  }
 
-      if (result == null) {
-        return [];
-      }
-
-      return result.map((e) => SongModel.fromMap(e)).toList();
-    } on PlatformException catch (e) {
-      // Handle native code exceptions.
-      debugPrint("Failed to query songs: '${e.message}'.");
-      return [];
-    }
+  @override
+  Future<void> scanFile({String? path}) async {
+    await methodChannel.invokeMethod('scanFile', {'path': path});
   }
 }

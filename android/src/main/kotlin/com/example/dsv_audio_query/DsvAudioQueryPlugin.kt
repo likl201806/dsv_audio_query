@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -48,6 +50,18 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
           querySongsFromMediaStore(result)
         } else {
           result.error("PERMISSION_DENIED", "Storage permission is denied.", null)
+        }
+      }
+      "scanFile" -> {
+        var path = call.argument<String>("path")
+        if (path == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.FROYO) {
+          // If no path is provided, scan the public Music directory.
+          path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).path
+        }
+        if (path != null) {
+          scanFile(path, result)
+        } else {
+          result.success(null) // Nothing to scan
         }
       }
       else -> result.notImplemented()
@@ -156,6 +170,16 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       result.success(songList)
     } catch (e: Exception) {
       result.error("QUERY_FAILED", e.message, null)
+    }
+  }
+
+  private fun scanFile(path: String, result: Result) {
+    MediaScannerConnection.scanFile(
+        activity!!.applicationContext,
+        arrayOf(path),
+        null
+    ) { _, _ ->
+      result.success(null)
     }
   }
 

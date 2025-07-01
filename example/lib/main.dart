@@ -65,6 +65,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
   final Map<String, double> _downloadProgress = {};
   final Map<String, bool> _isDownloaded = {};
   final Dio _dio = Dio();
+  final _dsvAudioQueryPlugin = DsvAudioQuery();
   late final String _localPath;
 
   @override
@@ -117,6 +118,10 @@ class _DownloadScreenState extends State<DownloadScreen> {
         _isDownloaded[song.url] = true;
         _downloadProgress.remove(song.url);
       });
+      // After successful download, scan the file to make it visible to MediaStore on Android.
+      if (Platform.isAndroid) {
+        await _dsvAudioQueryPlugin.scanFile(path: savePath);
+      }
     } catch (e) {
       debugPrint("Error downloading song: $e");
       setState(() {
@@ -208,6 +213,13 @@ class _LocalSongsScreenState extends State<LocalSongsScreen> {
     if (status == PermissionStatus.granted) {
       querySongs();
     }
+  }
+
+  Future<void> _refreshSongs() async {
+    // On Android, this will scan the public Music directory for new files.
+    // On iOS, this is a no-op but harmless.
+    await _dsvAudioQueryPlugin.scanFile();
+    await querySongs();
   }
 
   Future<void> querySongs() async {
@@ -331,7 +343,7 @@ class _LocalSongsScreenState extends State<LocalSongsScreen> {
                 ),
               )
             : RefreshIndicator(
-                onRefresh: querySongs,
+                onRefresh: _refreshSongs,
                 child: ListView.builder(
                   itemCount: _songs.length,
                   itemBuilder: (context, index) {
@@ -435,6 +447,12 @@ class _LocalSongsScreenState extends State<LocalSongsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Local Music Library'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshSongs,
+          ),
+        ],
       ),
       body: body,
     );
