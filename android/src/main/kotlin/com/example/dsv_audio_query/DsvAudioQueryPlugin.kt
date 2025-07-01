@@ -124,7 +124,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
     )
     // Query condition.
     val selection = "${MediaStore.Audio.Media.DURATION} >= ?"
-    val selectionArgs = arrayOf("30000") // 30 seconds
+    val selectionArgs = arrayOf("3000") // 30 seconds
     // Sort order.
     val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
