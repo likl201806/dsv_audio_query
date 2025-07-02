@@ -120,82 +120,99 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
     val songList = mutableListOf<Map<String, Any?>>()
     val retriever = MediaMetadataRetriever()
 
-    // Define the columns to be queried from the Files table.
+    // Define the columns to be queried.
     val projection = arrayOf(
-        MediaStore.Files.FileColumns._ID,
-        MediaStore.Files.FileColumns.DATA, // File path
-        MediaStore.Files.FileColumns.TITLE
+        MediaStore.Audio.Media._ID,
+        MediaStore.Audio.Media.DATA,       // File path
+        MediaStore.Audio.Media.TITLE,
+        MediaStore.Audio.Media.ARTIST,
+        MediaStore.Audio.Media.ALBUM
     )
 
-    // Query condition: select files based on MIME type for common audio formats.
-    val selection = "${MediaStore.Files.FileColumns.MIME_TYPE} IN (?, ?, ?, ?, ?, ?)"
-    val selectionArgs = arrayOf("audio/mpeg", "audio/mp3", "audio/x-wav", "audio/ogg", "audio/x-ms-wma", "audio/flac")
-
     // Sort order.
-    val sortOrder = "${MediaStore.Files.FileColumns.TITLE} ASC"
-    Log.d(TAG, "Querying MediaStore.Files with selection: $selection")
+    val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+    Log.d(TAG, "Querying MediaStore.Audio without filters to get all entries.")
 
     try {
       resolver.query(
-          MediaStore.Files.getContentUri("external"),
+          MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
           projection,
-          null,
-          null,
-          null
+          null, // No selection, get all audio entries
+          null, // No selection args
+          sortOrder
       )?.use { cursor -> // 'use' will automatically close the cursor
-        Log.d(TAG, "Query successful. Found ${cursor.count} potential audio files.")
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
-        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
-        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
+        Log.d(TAG, "Query successful. Found ${cursor.count} potential audio files in MediaStore.")
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
 
         while (cursor.moveToNext()) {
+          val id = cursor.getLong(idColumn)
           val filePath = cursor.getString(dataColumn)
+          
+          if (filePath == null) {
+              Log.w(TAG, "Skipping entry with null file path. ID: $id")
+              continue
+          }
           Log.d(TAG, "Processing file: $filePath")
+
+          // Primary metadata from MediaStore
+          var finalTitle: String? = cursor.getString(titleColumn)
+          var finalArtist: String? = cursor.getString(artistColumn)
+          var finalAlbum: String? = cursor.getString(albumColumn)
+
           var artwork: ByteArray? = null
-          var title: String? = cursor.getString(titleColumn)
-          var artist: String? = null
-          var album: String? = null
           var duration: Long? = null
 
-          if (filePath != null) {
-            try {
-              retriever.setDataSource(filePath)
-              artwork = retriever.embeddedPicture
-              artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-              album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-              val fileTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-              // Only use the retriever's title if the MediaStore title is null, empty, or a filename.
-              if (title.isNullOrEmpty() || title == filePath.substringAfterLast('/')) {
-                if (!fileTitle.isNullOrEmpty()) {
-                  title = fileTitle
-                }
-              }
-              retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.let {
-                duration = it.toLongOrNull()
-              }
-              Log.d(TAG, "  -> Metadata: Title='$title', Artist='$artist', Duration=$duration")
-            } catch (e: Exception) {
-              Log.e(TAG, "  -> Failed to retrieve metadata for $filePath", e)
-              // File path may be invalid, file is corrupted, or lacks metadata.
+          try {
+            retriever.setDataSource(filePath)
+
+            // Secondary metadata from the file itself (fallback)
+            val retrieverTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+            val retrieverArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            val retrieverAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            
+            artwork = retriever.embeddedPicture
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.let {
+              duration = it.toLongOrNull()
             }
+            
+            // Consolidate: Use retriever data if MediaStore data is missing/invalid
+            if (finalTitle.isNullOrEmpty() || finalTitle == filePath.substringAfterLast('/')) {
+                finalTitle = retrieverTitle
+            }
+            if (finalArtist.isNullOrEmpty()) {
+                finalArtist = retrieverArtist
+            }
+            if (finalAlbum.isNullOrEmpty()) {
+                finalAlbum = retrieverAlbum
+            }
+
+            Log.d(TAG, "  -> Consolidated Metadata: Title='$finalTitle', Artist='$finalArtist', Duration=$duration")
+
+          } catch (e: Exception) {
+            Log.e(TAG, "  -> Failed to retrieve metadata for $filePath", e)
+            // If retriever fails, we still have the (potentially incomplete) MediaStore data
           }
 
-          // Filter out short audio clips (e.g., ringtones) and add to list
+          // Filter out short audio clips and add to list
           duration?.let { currentDuration ->
             if (currentDuration >= 3000) {
-                Log.d(TAG, "  -> Adding song to list: $title")
+                Log.d(TAG, "  -> Adding song to list: $finalTitle")
                 val songMap = mapOf(
-                    "id" to cursor.getLong(idColumn),
-                    "title" to title,
-                    "artist" to artist,
-                    "album" to album,
+                    "id" to id,
+                    "title" to finalTitle,
+                    "artist" to finalArtist,
+                    "album" to finalAlbum,
                     "duration" to currentDuration,
                     "data" to filePath,
                     "artwork" to artwork
                 )
                 songList.add(songMap)
             } else {
-              Log.d(TAG, "  -> Skipping short audio file: $title, Duration: $currentDuration")
+              Log.d(TAG, "  -> Skipping short audio file: $finalTitle, Duration: $currentDuration")
             }
           }
         }
