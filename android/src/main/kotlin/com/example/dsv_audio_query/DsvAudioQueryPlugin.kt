@@ -139,9 +139,9 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       resolver.query(
           MediaStore.Files.getContentUri("external"),
           projection,
-          selection,
-          selectionArgs,
-          sortOrder
+          null,
+          null,
+          null
       )?.use { cursor -> // 'use' will automatically close the cursor
         Log.d(TAG, "Query successful. Found ${cursor.count} potential audio files.")
         val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
