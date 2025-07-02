@@ -164,8 +164,11 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
               artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
               album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
               val fileTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-              if (!fileTitle.isNullOrEmpty()) {
-                title = fileTitle
+              // Only use the retriever's title if the MediaStore title is null, empty, or a filename.
+              if (title.isNullOrEmpty() || title == filePath.substringAfterLast('/')) {
+                if (!fileTitle.isNullOrEmpty()) {
+                  title = fileTitle
+                }
               }
               retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.let {
                 duration = it.toLongOrNull()
