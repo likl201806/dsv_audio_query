@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -33,6 +34,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
   private var activity: Activity? = null
   private var pendingResult: Result? = null
   private val permissionRequestCode = 101
+  private val TAG = "DsvAudioQueryPlugin"
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "dsv_audio_query")
@@ -48,8 +50,10 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       }
       "querySongs" -> {
         if (hasPermissions()) {
+          Log.d(TAG, "Permissions granted. Calling querySongsFromMediaStore.")
           querySongsFromMediaStore(result)
         } else {
+          Log.w(TAG, "Permissions denied. Cannot query songs.")
           result.error("PERMISSION_DENIED", "Storage permission is denied.", null)
         }
       }
@@ -112,68 +116,94 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
   }
 
   private fun querySongsFromMediaStore(result: Result) {
+    Log.d(TAG, "Starting querySongsFromMediaStore.")
     val songList = mutableListOf<Map<String, Any?>>()
-    // Define the columns to be queried.
+    val retriever = MediaMetadataRetriever()
+
+    // Define the columns to be queried from the Files table.
     val projection = arrayOf(
-        MediaStore.Audio.Media._ID,
-        MediaStore.Audio.Media.TITLE,
-        MediaStore.Audio.Media.ARTIST,
-        MediaStore.Audio.Media.ALBUM,
-        MediaStore.Audio.Media.DURATION,
-        MediaStore.Audio.Media.DATA
+        MediaStore.Files.FileColumns._ID,
+        MediaStore.Files.FileColumns.DATA, // File path
+        MediaStore.Files.FileColumns.TITLE
     )
-    // Query condition.
-    val selection = "${MediaStore.Audio.Media.DURATION} >= ?"
-    val selectionArgs = arrayOf("3000") // 3 seconds
+
+    // Query condition: select files based on MIME type for common audio formats.
+    val selection = "${MediaStore.Files.FileColumns.MIME_TYPE} IN (?, ?, ?, ?, ?, ?)"
+    val selectionArgs = arrayOf("audio/mpeg", "audio/mp3", "audio/x-wav", "audio/ogg", "audio/x-ms-wma", "audio/flac")
+
     // Sort order.
-    val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+    val sortOrder = "${MediaStore.Files.FileColumns.TITLE} ASC"
+    Log.d(TAG, "Querying MediaStore.Files with selection: $selection")
 
     try {
       resolver.query(
-          MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+          MediaStore.Files.getContentUri("external"),
           projection,
-          null,
-          null,
-          null
+          selection,
+          selectionArgs,
+          sortOrder
       )?.use { cursor -> // 'use' will automatically close the cursor
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-        val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+        Log.d(TAG, "Query successful. Found ${cursor.count} potential audio files.")
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
+        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
 
         while (cursor.moveToNext()) {
           val filePath = cursor.getString(dataColumn)
+          Log.d(TAG, "Processing file: $filePath")
           var artwork: ByteArray? = null
+          var title: String? = cursor.getString(titleColumn)
+          var artist: String? = null
+          var album: String? = null
+          var duration: Long? = null
 
           if (filePath != null) {
-            val retriever = MediaMetadataRetriever()
             try {
               retriever.setDataSource(filePath)
               artwork = retriever.embeddedPicture
+              artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+              album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+              val fileTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+              if (!fileTitle.isNullOrEmpty()) {
+                title = fileTitle
+              }
+              retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.let {
+                duration = it.toLongOrNull()
+              }
+              Log.d(TAG, "  -> Metadata: Title='$title', Artist='$artist', Duration=$duration")
             } catch (e: Exception) {
-              // File path may be invalid or file is corrupted.
-            } finally {
-              retriever.release()
+              Log.e(TAG, "  -> Failed to retrieve metadata for $filePath", e)
+              // File path may be invalid, file is corrupted, or lacks metadata.
             }
           }
 
-          val songMap = mapOf(
-              "id" to cursor.getLong(idColumn),
-              "title" to cursor.getString(titleColumn),
-              "artist" to cursor.getString(artistColumn),
-              "album" to cursor.getString(albumColumn),
-              "duration" to cursor.getLong(durationColumn),
-              "data" to cursor.getString(dataColumn),
-              "artwork" to artwork
-          )
-          songList.add(songMap)
+          // Filter out short audio clips (e.g., ringtones) and add to list
+          duration?.let { currentDuration ->
+            if (currentDuration >= 3000) {
+                Log.d(TAG, "  -> Adding song to list: $title")
+                val songMap = mapOf(
+                    "id" to cursor.getLong(idColumn),
+                    "title" to title,
+                    "artist" to artist,
+                    "album" to album,
+                    "duration" to currentDuration,
+                    "data" to filePath,
+                    "artwork" to artwork
+                )
+                songList.add(songMap)
+            } else {
+              Log.d(TAG, "  -> Skipping short audio file: $title, Duration: $currentDuration")
+            }
+          }
         }
       }
+      Log.d(TAG, "Query finished. Returning ${songList.size} songs.")
       result.success(songList)
     } catch (e: Exception) {
+      Log.e(TAG, "QUERY_FAILED", e)
       result.error("QUERY_FAILED", e.message, null)
+    } finally {
+        retriever.release()
     }
   }
 
@@ -183,6 +213,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         arrayOf(path),
         null
     ) { _, _ ->
+      Log.d(TAG, "  -> scanFile success")
       result.success(null)
     }
   }
