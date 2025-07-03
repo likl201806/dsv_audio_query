@@ -29,6 +29,14 @@ class DsvAudioQuery {
     return DsvAudioQueryPlatform.instance.querySongs(sortType: sortType);
   }
 
+  /// Deletes a file from the file system and removes its entry from the MediaStore.
+  ///
+  /// Requires the full file path.
+  /// Returns `true` if the deletion was successful.
+  Future<bool> deleteFile({required String path}) {
+    return DsvAudioQueryPlatform.instance.deleteFile(path: path);
+  }
+
   Future<void> scanFile({String? path}) {
     return DsvAudioQueryPlatform.instance.scanFile(path: path);
   }

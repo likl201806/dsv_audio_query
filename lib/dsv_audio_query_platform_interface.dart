@@ -44,6 +44,11 @@ abstract class DsvAudioQueryPlatform extends PlatformInterface {
     throw UnimplementedError('querySongs() has not been implemented.');
   }
 
+  /// Deletes a file and its MediaStore entry.
+  Future<bool> deleteFile({required String path}) {
+    throw UnimplementedError('deleteFile() has not been implemented.');
+  }
+
   /// Scans a file to make it available to the media library.
   /// On Android, this triggers the MediaScanner. If path is null, it scans the public Music directory.
   /// On iOS, this is a no-op as files in the Documents directory are found automatically.

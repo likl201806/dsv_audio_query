@@ -38,6 +38,13 @@ class MethodChannelDsvAudioQuery extends DsvAudioQueryPlatform {
   }
 
   @override
+  Future<bool> deleteFile({required String path}) async {
+    final bool? success =
+        await methodChannel.invokeMethod<bool>('deleteFile', {'path': path});
+    return success ?? false;
+  }
+
+  @override
   Future<void> scanFile({String? path}) async {
     await methodChannel.invokeMethod('scanFile', {'path': path});
   }

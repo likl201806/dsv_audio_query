@@ -69,6 +69,14 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
           result.success(null) // Nothing to scan
         }
       }
+      "deleteFile" -> {
+        val path = call.argument<String>("path")
+        if (path == null) {
+          result.error("INVALID_ARGUMENT", "File path cannot be null.", null)
+          return
+        }
+        deleteFile(path, result)
+      }
       else -> result.notImplemented()
     }
   }
@@ -224,6 +232,38 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       result.error("QUERY_FAILED", e.message, null)
     } finally {
         retriever.release()
+    }
+  }
+
+  private fun deleteFile(path: String, result: MethodChannel.Result) {
+    try {
+      // First, try to delete the file from the MediaStore.
+      // This is the modern, correct way to handle file deletions on Android.
+      val where = "${MediaStore.Files.FileColumns.DATA} = ?"
+      val args = arrayOf(path)
+      val rowsDeleted = resolver.delete(MediaStore.Files.getContentUri("external"), where, args)
+
+      // Second, delete the physical file.
+      val file = java.io.File(path)
+      var fileDeleted = false
+      if (file.exists()) {
+        fileDeleted = file.delete()
+      }
+
+      // The operation is successful if the MediaStore entry is gone OR the file is physically gone.
+      val success = rowsDeleted > 0 || fileDeleted
+      Log.d(TAG, "Deletion result for $path: success=$success (mediaStoreRows=$rowsDeleted, fileDeleted=$fileDeleted)")
+      result.success(success)
+
+    } catch (e: SecurityException) {
+        Log.e(TAG, "SecurityException while deleting file: $path. Maybe a RecoverableSecurityException?", e)
+        // For Android Q and above, we might need to handle RecoverableSecurityException
+        // and ask the user for permission. For now, we report failure.
+        result.error("DELETE_FAILED_PERMISSION", "Permission denied to delete file.", e.message)
+    }
+    catch (e: Exception) {
+      Log.e(TAG, "Error deleting file: $path", e)
+      result.error("DELETE_FAILED", "An error occurred while deleting the file.", e.message)
     }
   }
 
