@@ -249,29 +249,49 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
   }
 
   private fun deleteSong(id: Long, result: MethodChannel.Result) {
+    val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+
     try {
-      val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-      val rowsDeleted = resolver.delete(contentUri, null, null)
-
-      val success = rowsDeleted > 0
-      Log.d(TAG, "Deletion result for ID $id: success=$success (mediaStoreRows=$rowsDeleted)")
-      result.success(success)
-
-    } catch (e: SecurityException) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
-        try {
-            pendingDeleteResult = result // Save the result callback
-            val intentSender = e.userAction.actionIntent.intentSender
-            activity?.startIntentSenderForResult(intentSender, deleteRequestCode, null, 0, 0, 0, null)
-        } catch (sendEx: IntentSender.SendIntentException) {
-            pendingDeleteResult = null
-            Log.e(TAG, "Failed to send delete intent", sendEx)
-            result.error("DELETE_FAILED_SEND_INTENT", "Failed to ask for user permission.", sendEx.message)
+        // For Android 11 (R) and above, createDeleteRequest is the standard way.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val uris = listOf(contentUri)
+            val pendingIntent = MediaStore.createDeleteRequest(resolver, uris)
+            try {
+                pendingDeleteResult = result
+                activity?.startIntentSenderForResult(pendingIntent.intentSender, deleteRequestCode, null, 0, 0, 0, null)
+            } catch (e: IntentSender.SendIntentException) {
+                pendingDeleteResult = null
+                Log.e(TAG, "Failed to send delete intent for R+", e)
+                result.error("DELETE_FAILED_SEND_INTENT", "Failed to ask for user permission on Android 11+.", e.message)
+            }
+        } else {
+            // For Android 10 (Q), we catch the RecoverableSecurityException.
+            // For older versions, this will just work if permission is granted.
+            val rowsDeleted = resolver.delete(contentUri, null, null)
+            if (rowsDeleted > 0) {
+                result.success(true)
+            } else {
+                // This could happen if the URI is invalid or file was already deleted.
+                Log.w(TAG, "Delete operation resulted in 0 rows affected for ID $id.")
+                result.success(false)
+            }
         }
-      } else {
-        Log.e(TAG, "SecurityException while deleting song: ID $id.", e)
-        result.error("DELETE_FAILED_PERMISSION", "Permission denied to delete song.", e.message)
-      }
+    } catch (e: SecurityException) {
+        // This part is mainly for Android 10 (Q).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
+            try {
+                pendingDeleteResult = result
+                val intentSender = e.userAction.actionIntent.intentSender
+                activity?.startIntentSenderForResult(intentSender, deleteRequestCode, null, 0, 0, 0, null)
+            } catch (sendEx: IntentSender.SendIntentException) {
+                pendingDeleteResult = null
+                Log.e(TAG, "Failed to send delete intent for Q", sendEx)
+                result.error("DELETE_FAILED_SEND_INTENT", "Failed to ask for user permission on Android 10.", sendEx.message)
+            }
+        } else {
+            Log.e(TAG, "A non-recoverable SecurityException occurred", e)
+            result.error("DELETE_FAILED_PERMISSION", "Permission denied to delete song.", e.message)
+        }
     }
     catch (e: Exception) {
       Log.e(TAG, "Error deleting song: ID $id", e)
