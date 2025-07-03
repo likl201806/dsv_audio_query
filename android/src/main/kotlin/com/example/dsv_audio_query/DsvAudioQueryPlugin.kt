@@ -2,8 +2,10 @@ package com.example.dsv_audio_query
 
 import android.Manifest
 import android.app.Activity
+import android.app.RecoverableSecurityException
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
@@ -24,7 +26,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
 
 /** DsvAudioQueryPlugin */
-class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener {
+class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener, PluginRegistry.ActivityResultListener {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -32,8 +34,10 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
   private lateinit var channel : MethodChannel
   private lateinit var resolver: ContentResolver
   private var activity: Activity? = null
-  private var pendingResult: Result? = null
+  private var pendingPermResult: Result? = null
+  private var pendingDeleteResult: Result? = null
   private val permissionRequestCode = 101
+  private val deleteRequestCode = 102
   private val TAG = "DsvAudioQueryPlugin"
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -45,7 +49,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
   override fun onMethodCall(call: MethodCall, result: Result) {
     when (call.method) {
       "requestPermission" -> {
-        pendingResult = result
+        pendingPermResult = result
         requestPermissions()
       }
       "querySongs" -> {
@@ -110,23 +114,23 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       ActivityCompat.requestPermissions(activity!!, arrayOf(permission), permissionRequestCode)
     } else {
       // Permission already granted
-      pendingResult?.success(0) // granted
-      pendingResult = null
+      pendingPermResult?.success(0) // granted
+      pendingPermResult = null
     }
   }
 
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray): Boolean {
     if (requestCode == permissionRequestCode) {
       if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-        pendingResult?.success(0) // granted
+        pendingPermResult?.success(0) // granted
       } else {
         if (ActivityCompat.shouldShowRequestPermissionRationale(activity!!, permissions[0])) {
-          pendingResult?.success(1) // denied
+          pendingPermResult?.success(1) // denied
         } else {
-          pendingResult?.success(2) // permanently denied
+          pendingPermResult?.success(2) // permanently denied
         }
       }
-      pendingResult = null
+      pendingPermResult = null
       return true
     }
     return false
@@ -254,8 +258,20 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       result.success(success)
 
     } catch (e: SecurityException) {
-      Log.e(TAG, "SecurityException while deleting song: ID $id. This may require user consent via RecoverableSecurityException.", e)
-      result.error("DELETE_FAILED_PERMISSION", "Permission denied to delete song.", e.message)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
+        try {
+            pendingDeleteResult = result // Save the result callback
+            val intentSender = e.userAction.actionIntent.intentSender
+            activity?.startIntentSenderForResult(intentSender, deleteRequestCode, null, 0, 0, 0, null)
+        } catch (sendEx: IntentSender.SendIntentException) {
+            pendingDeleteResult = null
+            Log.e(TAG, "Failed to send delete intent", sendEx)
+            result.error("DELETE_FAILED_SEND_INTENT", "Failed to ask for user permission.", sendEx.message)
+        }
+      } else {
+        Log.e(TAG, "SecurityException while deleting song: ID $id.", e)
+        result.error("DELETE_FAILED_PERMISSION", "Permission denied to delete song.", e.message)
+      }
     }
     catch (e: Exception) {
       Log.e(TAG, "Error deleting song: ID $id", e)
@@ -314,6 +330,7 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
     activity = binding.activity
     binding.addRequestPermissionsResultListener(this)
+    binding.addActivityResultListener(this)
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -327,5 +344,20 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
 
   override fun onDetachedFromActivity() {
     activity = null
+  }
+
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?): Boolean {
+    if (requestCode == deleteRequestCode) {
+        if (resultCode == Activity.RESULT_OK) {
+            // User granted permission, the file is deleted by the system.
+            pendingDeleteResult?.success(true)
+        } else {
+            // User denied permission.
+            pendingDeleteResult?.success(false)
+        }
+        pendingDeleteResult = null // Clear the pending result
+        return true
+    }
+    return false
   }
 }
