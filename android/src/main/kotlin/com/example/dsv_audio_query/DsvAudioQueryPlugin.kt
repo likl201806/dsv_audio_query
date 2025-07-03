@@ -78,9 +78,10 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         deleteFile(path, result)
       }
       "deleteSong" -> {
-        val id = call.argument<Long>("id")
+        // Handle numbers coming from Dart, which can be Int or Long.
+        val id = (call.argument<Any>("id") as? Number)?.toLong()
         if (id == null) {
-          result.error("INVALID_ARGUMENT", "Song ID cannot be null.", null)
+          result.error("INVALID_ARGUMENT", "Song ID cannot be null or of the wrong type.", null)
           return
         }
         deleteSong(id, result)
