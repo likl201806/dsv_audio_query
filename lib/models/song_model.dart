@@ -48,4 +48,17 @@ class SongModel {
       artwork: map['artwork'],
     );
   }
+
+  /// Converts the [SongModel] instance to a [Map].
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'duration': duration,
+      'data': data,
+      'artwork': artwork,
+    };
+  }
 }

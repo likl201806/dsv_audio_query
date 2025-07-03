@@ -24,6 +24,12 @@ class MockDsvAudioQueryPlatform
   Future<void> scanFile({String? path}) async {
     // This is a mock, so we don't need to do anything.
   }
+
+  @override
+  Future<bool> deleteSong({required SongModel song}) async {
+    // Return true to simulate a successful deletion in the mock.
+    return true;
+  }
 }
 
 void main() {
@@ -47,5 +53,18 @@ void main() {
     DsvAudioQueryPlatform.instance = fakePlatform;
 
     expect(await dsvAudioQueryPlugin.getPlatformVersion(), '42');
+  });
+
+  test('deleteSong returns true', () async {
+    DsvAudioQuery dsvAudioQueryPlugin = DsvAudioQuery();
+    MockDsvAudioQueryPlatform fakePlatform = MockDsvAudioQueryPlatform();
+    DsvAudioQueryPlatform.instance = fakePlatform;
+
+    final songToDelete = SongModel(
+      id: 123,
+      title: 'Test Song',
+      data: '/path/to/test.mp3',
+    );
+    expect(await dsvAudioQueryPlugin.deleteSong(song: songToDelete), isTrue);
   });
 }

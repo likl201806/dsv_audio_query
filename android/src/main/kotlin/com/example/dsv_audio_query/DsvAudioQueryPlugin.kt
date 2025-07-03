@@ -77,6 +77,14 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
         }
         deleteFile(path, result)
       }
+      "deleteSong" -> {
+        val id = call.argument<Long>("id")
+        if (id == null) {
+          result.error("INVALID_ARGUMENT", "Song ID cannot be null.", null)
+          return
+        }
+        deleteSong(id, result)
+      }
       else -> result.notImplemented()
     }
   }
@@ -232,6 +240,25 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
       result.error("QUERY_FAILED", e.message, null)
     } finally {
         retriever.release()
+    }
+  }
+
+  private fun deleteSong(id: Long, result: MethodChannel.Result) {
+    try {
+      val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+      val rowsDeleted = resolver.delete(contentUri, null, null)
+
+      val success = rowsDeleted > 0
+      Log.d(TAG, "Deletion result for ID $id: success=$success (mediaStoreRows=$rowsDeleted)")
+      result.success(success)
+
+    } catch (e: SecurityException) {
+      Log.e(TAG, "SecurityException while deleting song: ID $id. This may require user consent via RecoverableSecurityException.", e)
+      result.error("DELETE_FAILED_PERMISSION", "Permission denied to delete song.", e.message)
+    }
+    catch (e: Exception) {
+      Log.e(TAG, "Error deleting song: ID $id", e)
+      result.error("DELETE_FAILED", "An error occurred while deleting the song.", e.message)
     }
   }
 

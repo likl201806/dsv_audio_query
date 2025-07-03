@@ -44,9 +44,9 @@ abstract class DsvAudioQueryPlatform extends PlatformInterface {
     throw UnimplementedError('querySongs() has not been implemented.');
   }
 
-  /// Deletes a file and its MediaStore entry.
-  Future<bool> deleteFile({required String path}) {
-    throw UnimplementedError('deleteFile() has not been implemented.');
+  /// Deletes a song and its MediaStore entry.
+  Future<bool> deleteSong({required SongModel song}) {
+    throw UnimplementedError('deleteSong() has not been implemented.');
   }
 
   /// Scans a file to make it available to the media library.

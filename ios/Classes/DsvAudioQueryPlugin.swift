@@ -33,6 +33,14 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
         // This is not needed on iOS as the file system is scanned directly.
         // We call result to complete the Dart Future.
         result(nil)
+    case "deleteSong":
+        guard let args = call.arguments as? [String: Any],
+              let path = args["data"] as? String,
+              let url = URL(string: path) else {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "Song data is invalid", details: nil))
+            return
+        }
+        self.deleteSong(at: url, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -98,6 +106,16 @@ public class DsvAudioQueryPlugin: NSObject, FlutterPlugin {
           result(songList)
       } catch {
           result(FlutterError(code: "IO_ERROR", message: "Failed to read documents directory.", details: error.localizedDescription))
+      }
+  }
+
+  private func deleteSong(at url: URL, result: @escaping FlutterResult) {
+      let fileManager = FileManager.default
+      do {
+          try fileManager.removeItem(at: url)
+          result(true)
+      } catch {
+          result(FlutterError(code: "DELETE_FAILED", message: "Failed to delete song file.", details: error.localizedDescription))
       }
   }
 }

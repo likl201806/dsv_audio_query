@@ -29,12 +29,13 @@ class DsvAudioQuery {
     return DsvAudioQueryPlatform.instance.querySongs(sortType: sortType);
   }
 
-  /// Deletes a file from the file system and removes its entry from the MediaStore.
+  /// Deletes a song from the file system and removes its entry from the MediaStore.
   ///
-  /// Requires the full file path.
+  /// The [song] model must contain the necessary information for deletion
+  /// (ID for Android, file path for iOS).
   /// Returns `true` if the deletion was successful.
-  Future<bool> deleteFile({required String path}) {
-    return DsvAudioQueryPlatform.instance.deleteFile(path: path);
+  Future<bool> deleteSong({required SongModel song}) {
+    return DsvAudioQueryPlatform.instance.deleteSong(song: song);
   }
 
   Future<void> scanFile({String? path}) {

@@ -38,9 +38,9 @@ class MethodChannelDsvAudioQuery extends DsvAudioQueryPlatform {
   }
 
   @override
-  Future<bool> deleteFile({required String path}) async {
+  Future<bool> deleteSong({required SongModel song}) async {
     final bool? success =
-        await methodChannel.invokeMethod<bool>('deleteFile', {'path': path});
+        await methodChannel.invokeMethod<bool>('deleteSong', song.toMap());
     return success ?? false;
   }
 
