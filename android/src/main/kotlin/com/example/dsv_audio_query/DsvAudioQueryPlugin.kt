@@ -183,7 +183,6 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
           var finalTitle: String? = cursor.getString(titleColumn)
           var finalArtist: String? = cursor.getString(artistColumn)
           var finalAlbum: String? = cursor.getString(albumColumn)
-          Log.d(TAG, "+++ MediaStore TITLE: '${finalTitle}' (path=$filePath)")
 
           var artwork: ByteArray? = null
           var duration: Long? = null
@@ -195,7 +194,6 @@ class DsvAudioQueryPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Plug
             val retrieverTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
             val retrieverArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
             val retrieverAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-            Log.d(TAG, "+++ Retriever TITLE: '${retrieverTitle}' (path=$filePath)")
             
             artwork = retriever.embeddedPicture
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.let {
